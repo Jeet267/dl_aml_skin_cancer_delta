@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints
+archive/
+models/*.pth
+models/*.h5
+data/train/
+data/test/
+results/*.png
+results/*.pdf

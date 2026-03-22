@@ -1,0 +1,69 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+
+% ── Document ──────────────────────────────────────────────────────────────────
+\begin{document}
+
+\title{AI-Driven Skin Cancer Triage: Binary Classification of Dermoscopic Images from the HAM10000 Dataset}
+
+\author{\IEEEauthorblockN{Abhijeet Kumar Shah}
+\IEEEauthorblockA{\textit{Enroll. ID: 230036} \\
+\textit{B.Tech -- CS \& AI}}
+\and
+\IEEEauthorblockN{Aditya Raj Sharma}
+\IEEEauthorblockA{\textit{Enroll. ID: 230123} \\
+\textit{B.Tech -- CS \& AI}}
+}
+
+\maketitle
+
+\begin{abstract}
+Early detection of skin cancer reduces mortality rates significantly. In this project, we implement a diagnostic triage tool utilizing the HAM10000 dataset...
+\end{abstract}
+
+\begin{IEEEkeywords}
+Skin Cancer, Binary Classification, ResNet18, Computer Vision, HAM10000
+\end{IEEEkeywords}
+
+\section{Introduction}
+Melanoma is the most dangerous form of skin cancer. Due to the scarcity of dermatologists everywhere...
+
+\section{Literature Review}
+Computer-Aided Diagnosis (CAD) has been a vital part of dermoscopy...
+
+\section{Dataset Description}
+We used the HAM10000 dataset consisting of 10,015 images. We formulated the problem as binary classification (Cancer vs Non-Cancer)...
+
+\section{Methodology}
+\subsection{Data Preprocessing}
+Metadata normalization and handling missing values using median imputation...
+
+\subsection{Baseline Metadata Models}
+Logistic Regression and Random Forest leveraging age, sex, and localization...
+
+\subsection{Computer Vision Extraction}
+HOG and Color Histograms...
+
+\subsection{Deep Learning Classification}
+ResNet18 pre-trained on ImageNet...
+
+\section{Experiments and Results}
+We tracked Recall strictly due to the cost of False Negatives...
+
+\section{Conclusion}
+Transfer learning drastically outperforms traditional metadata baselines...
+
+\end{document}

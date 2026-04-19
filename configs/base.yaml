@@ -1,0 +1,14 @@
+# Phase 1 base config
+data:
+  train_path: "data/train.csv"
+  test_path: "data/test.csv"
+features:
+  correlation_threshold: 0.90
+  ug_duckling_groups:
+    - [patient_id]
+    - [patient_id, anatom_site_general]
+    - [patient_id, tbp_lv_location_simple]
+models:
+  - lightgbm
+  - xgboost
+  - catboost

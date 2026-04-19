@@ -1,0 +1,14 @@
+# Phase 2 SwinV2-B (256px) - Best Model config
+model:
+  backbone: "swinv2_base_window12to16_192to256"
+  image_size: 256
+  pretrained: true
+training:
+  batch_size: 32
+  epochs: 10
+  focal_gamma: 2.0
+  focal_alpha: 0.25
+  optimizer: "AdamW"
+  lr_backbone: 3.0e-5
+  lr_head: 3.0e-4
+  TTA: true

@@ -12,3 +12,5 @@ imbalanced-learn
 opencv-python
 scikit-image
 jupyter
+timm
+albumentations

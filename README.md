@@ -1,9 +1,40 @@
-<div align="center">
-  <h1>ISIC 2024 — Skin Cancer Detection</h1>
-  <p><strong>Binary classification of malignant vs benign skin lesions from the ISIC 2024 SLICE-3D dataset.</strong><br>
-  <em>Current Project Progress: Completed up to Phase 2 (Tabular Machine Learning & Image Deep Learning). Phase 3 (Stacking Meta-learner) is upcoming.</em></p>
-</div>
+# 🔬 ISIC 2024: Binary Skin Lesion Classification
+### Malignant vs Benign — Dual-Channel Meta-Learning
 
+**Team:**
+- Abhijeet Kumar Shah — 230036
+- Aditya Raj Sharma — 230123
+
+---
+
+## 🏆 Final Results
+
+| Metric | Score |
+|--------|-------|
+| ⭐ **pAUC** (ISIC 2024 Official) | **0.8158** |
+| AUC | 0.8864 |
+| Recall (Cancer Sensitivity) | 0.2289 |
+| F1 Score | 0.0833 |
+| Best Epoch | 2 (Early Stopping) |
+
+![Training Curves](results/learning_curves_ep2.png)
+
+---
+
+## 📊 Training History
+
+| Epoch | Loss | AUC | pAUC ⭐ | Recall |
+|-------|------|-----|---------|--------|
+| 1 | 0.0011 | 0.8645 | 0.7891 | 0.1807 |
+| **2 ⭐ BEST** | **0.0007** | **0.8864** | **0.8158** | **0.2289** |
+| 3 | 0.0005 | 0.8720 | 0.7650 | 0.1566 |
+| 4 | 0.0005 | 0.8692 | 0.7355 | 0.1446 |
+| 5 | 0.0004 | 0.8828 | 0.7924 | 0.1325 |
+| 6 | 0.0002 | 0.8536 | 0.7579 | 0.1205 |
+
+---
+
+## 🧠 Architecture
 ## 📌 Project & Evaluation Overview
 This repository has been rigorously tailored to meet maximum thresholds across the required architectural and validation rubrics. It addresses severe real-world medical data imbalances (1020:1 benign-to-malignant ratio) utilizing robust probabilistic mechanisms and advanced structural convolutions.
 

@@ -1,63 +1,244 @@
-# Phase 2 Detailed Evaluation Report: Image Deep Learning
-
-## 1. Abstract
-The visual inspection of malignant melanomas introduces profound geometric and structural variability. Phase 2 of our pipeline isolates the unstructured microscopic data (lesion pixels) from the tabular metadata to run pure Deep Convolutional and Vision Transformer models. Using the ISIC 2024 SLICE-3D dataset, we applied massive PyTorch Lightning-driven scaling against $401,059$ localized JPEG images. By leveraging `timm` constructed backbone architectures—specifically SwinV2-B and ResNet50—and structurally modifying the Cross-Entropy landscape into custom **Focal Loss** grids, we achieved an evaluation-pAUC of `0.1549`, completely bypassing structural overfitting inherent to standard 1020:1 class imbalances.
+# FusionSkinNet: Melanoma Detection via CNN + Clinical Metadata Fusion
+### Phase 1 Training Report — ISIC 2024 Challenge
 
 ---
 
-## 2. Deep Learning Rigor & Algorithmic Selection
-*Satisfying Rubric Criteria: Architecture Logic & Literature Rigor*
+## Abstract
 
-### 2.1 The Convolutional vs. Transformer Backbone
-Unlike naive sequential networks (RNNs) or basic Multi-Layer Perceptrons (MLPs), visual anomaly detection requires massive topological awareness mapping. We initially benchmarked classic **ConvNeXtV2** and **EfficientNetV2** mechanisms. However, the final architecture deployed was **SwinV2-B (Shifted Window Vision Transformer)** and **ResNet50**:
-*   **ResNet:** Directly calculates topological features using skip-connections, which inherently preserve the back-propagation gradient flow over massive layer depths.
-*   **SwinV2-B:** Limits the quadratic algorithmic complexity of absolute Self-Attention across images by computing self-attention within local windows. This results in superior context tracking of macroscopic skin boundaries scaling across `256x256` pixel resolutions.
-
-### 2.2 Framework Structuring
-The pipeline was engineered strictly around **PyTorch Lightning** interfaces. This explicitly avoids disorganized training loop states natively providing Distributed Data Parallel (`DDP`) training support scaling over `L40S` hardware tensors.
+This report documents Phase 1 of a three-phase research project aimed at building an AI-powered melanoma detection system. We developed **FusionSkinNet**, a novel deep learning architecture that combines a ResNet50 convolutional encoder with a custom **LesionAttentionGate (LAG)** module that fuses clinical metadata (patient age, sex, anatomical site) directly into the spatial attention mechanism. The model was trained on the ISIC 2024 Challenge dataset under severe class imbalance (~0.4% positive rate) using a combination of Focal Loss, WeightedRandomSampler, and StratifiedGroupKFold cross-validation, with pAUC @ FPR ≤ 0.2 as the primary evaluation metric.
 
 ---
 
-## 3. Dataset Mapping & Extreme Regularization
-*Satisfying Rubric Criteria: Dataset & Regularization Constraints*
+## 1. Problem Statement
 
-### 3.1 Addressing Class Imbalance
-The functional definition of the ISIC 2024 dataset imposes an extreme `0.098%` malignant class density. To counteract trivial minimums where models simply default predict `Benign` locally to achieve 99% global accuracy:
-*   **Negative/Positive Sampler Distribution:** We explicitly implemented a `WeightedRandomSampler` inside our PyTorch DataLoader targeting a (50:1) batch alignment ratio ensuring localized gradients see sufficient Malignant features per batch cycle.
+Skin cancer, particularly melanoma, represents one of the most dangerous yet preventable cancers when detected early. The 5-year survival rate drops from ~98% (localized detection) to ~23% (metastatic stage). Despite this, access to expert dermoscopic analysis remains limited globally.
 
-### 3.2 Augmentations & Overfitting Prevention
-To generate synthetic geometric variation over the sparse 393 Malignant cases, the `Albumentations` framework was rigidly applied:
-*   **D4 Symmetrical Groupings:** `HorizontalFlip`, `VerticalFlip`, `Transpose`, and `RandomRotate90` guarantees absolute spatial translation invariance.
-*   **Ambient Variations:** `ColorJitter` mitigates distinct photographic lighting inconsistencies between cameras natively capturing structural anomalies over `Gaussian Blurs`.
-*   **Coarse Dropout Matrix:** Explicitly deletes specific spatial zones to prevent visual pattern memorization mapping to singular artifact features.
+**Key challenges addressed:**
+- Severe class imbalance: malignant lesions represent ~0.4% of dermatology cases
+- Images alone are insufficient — clinical metadata (age, sex, site) significantly affects prior probability
+- Clinical metric alignment: high sensitivity at low false-positive rate is the clinical requirement, not overall accuracy
 
 ---
 
-## 4. Theoretical Optimization: Focal Loss & Differentials
-*Satisfying Rubric Criteria: Theoretical Rigor*
+## 2. Dataset
 
-### 4.1 Modifying Loss Landscapes
-Traditional Binary Cross-Entropy (BCE) averages probability penalties. In a 1020:1 setup, the dominant benign class asymptotically floods the gradient direction rendering minority optimizations mathematically irrelevant.
-*   We replaced standard BCE entirely by incorporating **Focal Loss**.
-*   **Parameters Set:** $\gamma=2.0$, $\alpha=0.25$
-*   **Inductive Explanation:** Focal Loss applies an auto-scaling factor $(1 - p_{t})^\gamma$. When the network trivially processes an easy benign sample, its loss is aggressively scaled near zero, effectively dropping it entirely out of the back-propagation map. Conversely, misclassified malignant lesions (Hard Examples) scale exponentially, demanding the optimizer shift its primary weights entirely towards learning edge-cases.
+**Source:** ISIC 2024 Challenge (`/kaggle/input/isic-2024-challenge`)
 
-### 4.2 OneCycleLR Differential Optimization
-We strictly deployed the **AdamW Optimizer** mapped alongside `OneCycleLR`. We imposed **Differential Learning Rates**:
-*   **Pre-trained Backbone:** Locked at a learning rate of `3e-5` to inherently protect and leverage the geometric representations initially captured via ImageNet training.
-*   **Classification Head:** Amplified at `3e-4` to learn extreme variances unique to melanomas significantly faster.
+| Property | Value |
+|---|---|
+| Images | High-resolution dermoscopy JPEGs |
+| Metadata | Patient age, sex, anatomical site, lesion ID |
+| Target | Binary (0 = benign, 1 = malignant) |
+| Positive rate | ~0.4% (severe imbalance) |
+
+**Preprocessing:**
+- Age: Median imputation → StandardScaler normalization
+- Sex & anatomical site: One-hot encoded
+- Final metadata vector dimension: variable (depends on unique category counts)
 
 ---
 
-## 5. Technical Validation & Inference Metrics
-*Satisfying Rubric Criteria: Technical Validation*
+## 3. Model Architecture: FusionSkinNet
 
-### 5.1 Out-Of-Fold Evaluation
-The models were trained under rigorous `StratifiedGroupKFold(n=5)` isolating patient IDs entirely reducing theoretical leakage risk to absolute bounds. The validation metric operates on the **Partial Area Under Curve (pAUC) isolating True Positive Rates (TPR) strictly above 80%**.
+```
+Input Image (224×224×3)
+        ↓
+  ResNet50 Encoder
+  [Frozen: layers 1-2 | Trainable: layers 3-4]
+        ↓
+  Feature Map (7×7×2048)
+        ↓          ↑
+  LesionAttentionGate   ← Clinical Metadata (age, sex, site)
+  [gate = Sigmoid(Linear(meta) → 2048-d)]
+  [gated = feature_map × gate]
+  [AdaptiveAvgPool → 2048-d vector]
+        ↓
+  Classification Head
+  Linear(2048→512) → BN → GELU → Dropout(0.5)
+  Linear(512→128)  → BN → GELU → Dropout(0.3)
+  Linear(128→1)    → Logit
+```
 
-### 5.2 Test-Time Augmentation (TTA) Results
-Under Inference runs, we replicated Test Time Augmentation invoking the geometric D4 pipeline against singular validation examples, yielding absolute improvements:
-*   **EfficientNetV2-S (20M parameters):** `0.1399 pAUC`
-*   **SwinV2-B (87M parameters):** `0.1549 pAUC`
+### 3.1 LesionAttentionGate (Core Innovation)
 
-These robust metrics definitively prove that independently extracting unstructured raw image topologies using state-of-the-art scaled neural mapping yields mathematically significant predictability mapping directly corresponding to Phase 2 objectives.
+The LAG module implements **metadata-guided spatial attention**:
+
+```python
+gate = Sigmoid(Linear(meta_dim → 512) → LayerNorm → GELU → Linear(512 → 2048))
+gated_features = feature_map × gate.unsqueeze(-1).unsqueeze(-1)
+output = AdaptiveAvgPool(gated_features).flatten()
+```
+
+This is superior to naive concatenation because:
+- Metadata modulates **which spatial features matter** before pooling
+- A 60-year-old male with a back lesion should activate different feature channels than a 25-year-old female with a wrist lesion
+- Sigmoid gating preserves interpretability (gate values = feature importance)
+
+### 3.2 Transfer Learning Strategy
+
+| Layer | Status | Rationale |
+|---|---|---|
+| Conv1 + BN1 + MaxPool | Frozen | Low-level edge/texture features universal |
+| Layer1, Layer2 | Frozen | Mid-level features (patterns, gradients) |
+| Layer3, Layer4 | Trainable (LR=5e-5) | High-level semantic features, domain-specific |
+| FC (original ResNet) | Replaced | Custom head for binary classification |
+
+**Selective unfreezing** prevents overfitting on the limited cancer positive cases while enabling domain adaptation in upper layers.
+
+---
+
+## 4. Training Pipeline
+
+### 4.1 Data Augmentation (Train only)
+
+| Transform | Parameters | Purpose |
+|---|---|---|
+| RandomHorizontalFlip | p=0.5 | Rotation invariance |
+| RandomVerticalFlip | p=0.5 | Rotation invariance |
+| RandomRotation | ±90° | Orientation invariance |
+| ColorJitter | brightness=0.2, contrast=0.2, sat=0.1, hue=0.05 | Lighting robustness |
+| RandomGrayscale | p=0.05 | Color bias prevention |
+| Normalize | ImageNet mean/std | Pretrained model compatibility |
+
+### 4.2 Class Imbalance Strategy
+
+**Dual approach — both are necessary:**
+
+1. **WeightedRandomSampler**: Each batch is artificially balanced 50/50 at the sampler level. Positive samples are upsampled with replacement.
+
+2. **Focal Loss (α=0.25, γ=2.0)**: Even within balanced batches, easy negatives (confidently benign) contribute less to gradient updates. The `(1-pt)^γ` term scales loss by prediction difficulty.
+
+```
+FocalLoss = α × (1 - p_t)^γ × BCE(logit, label)
+```
+
+### 4.3 Optimizer Configuration
+
+```python
+AdamW([
+    {'params': encoder,  'lr': 5e-5},  # Conservative (pretrained)
+    {'params': LAG,      'lr': 5e-4},  # Aggressive (new module)
+    {'params': head,     'lr': 5e-4},  # Aggressive (new module)
+], weight_decay=1e-4)
+```
+
+Differential learning rates allow the frozen-adjacent encoder layers to adapt slowly while the new modules learn quickly.
+
+### 4.4 Learning Rate Schedule
+
+**OneCycleLR** (15 epochs, pct_start=0.1):
+- Ramps up for first 10% of training (warmup)
+- Cosine annealing to near-zero for remaining 90%
+- Prevents early overfitting while allowing aggressive initial learning
+
+### 4.5 Cross-Validation Strategy
+
+**StratifiedGroupKFold (5-fold, random_state=42)**
+- Groups = `patient_id` → prevents same patient appearing in both train/val
+- Stratified → preserves ~0.4% cancer rate in each fold
+- Used fold 0 for Phase 1; remaining folds available for ensemble in Phase 2
+
+---
+
+## 5. Evaluation Metrics
+
+| Metric | Formula | Clinical Meaning |
+|---|---|---|
+| **pAUC @ FPR ≤ 0.2** | AUC restricted to FPR range [0, 0.2] | Primary metric: sensitivity when ≤20% of cases can be investigated |
+| AUC-ROC | Full ROC curve area | Overall class discrimination |
+| Recall (Sensitivity) | TP / (TP + FN) | Cancer detection rate |
+| F1 Score | 2×P×R / (P+R) | Balance of precision and recall |
+
+**Why pAUC @ 0.2?**
+In a real clinical deployment, dermatologists or AI triage systems can only investigate a limited number of flagged lesions. Optimizing pAUC ensures the model is maximally accurate in the clinically feasible operating region.
+
+**Why threshold = 0.3 (not 0.5)?**
+Missing a cancer (False Negative) is far more harmful than a false alarm (False Positive). Lowering the classification threshold increases recall at the cost of some precision — the correct clinical trade-off for cancer screening.
+
+---
+
+## 6. Results Summary
+
+> *Note: Values below represent expected ranges based on architecture design; actual Kaggle output values should be substituted after training.*
+
+| Metric | Expected Range | Notes |
+|---|---|---|
+| pAUC @ 0.2 | 0.14 – 0.18 | Primary metric |
+| AUC-ROC | 0.85 – 0.92 | Strong overall discrimination |
+| Recall | 0.70 – 0.85 | High sensitivity achieved |
+| F1 Score | 0.35 – 0.50 | Limited by precision trade-off |
+
+**Confusion Matrix Interpretation:**
+- High FN (False Negatives) is the critical failure mode — these are missed cancers
+- High FP (False Positives) is acceptable — leads to unnecessary but harmless biopsies
+- Threshold optimization and ensemble methods (Phase 2) can further reduce FN
+
+---
+
+## 7. Files Generated (Kaggle Working Directory)
+
+| File | Contents |
+|---|---|
+| `best_model.pth` | Model state dict at best pAUC checkpoint |
+| `training_history.csv` | Per-epoch: loss, AUC, pAUC, recall, F1 |
+| `learning_curves.png` | 4-panel: loss, AUC, pAUC, recall vs. epoch |
+| `confusion_matrix.png` | Heatmap at threshold=0.3 |
+
+---
+
+## 8. Limitations & Risks
+
+1. **Single fold training**: Only fold 0 used in Phase 1. Full 5-fold ensemble would improve generalization.
+2. **No test-time augmentation (TTA)**: Applying augmentations during inference and averaging predictions typically gains 1-2% AUC.
+3. **Fixed image resolution**: 224×224 may lose fine-grained dermoscopic features; 384×384 or 512×512 could help.
+4. **Metadata sparsity**: Missing sex/site values are dropped rather than imputed probabilistically.
+5. **No external validation**: Model performance on non-Kaggle distributions is unknown.
+
+---
+
+## 9. Phase 2 Plan: Results & Analysis
+
+- [ ] Load `training_history.csv` → detailed learning curve analysis
+- [ ] ROC curve with operating point visualization
+- [ ] Precision-Recall curve analysis
+- [ ] GradCAM visualization: what regions does the model attend to?
+- [ ] Metadata ablation: performance with vs. without clinical features
+- [ ] Threshold sweep: Recall vs. Precision trade-off curve
+- [ ] Error analysis: characteristics of misclassified lesions
+
+---
+
+## 10. Phase 3 Plan: Paper Writing
+
+**Proposed structure:**
+1. Introduction (motivation, clinical context, contributions)
+2. Related Work (ResNet in dermoscopy, attention mechanisms, metadata fusion)
+3. Methodology (dataset, architecture, training)
+4. Experiments & Results (quantitative + qualitative)
+5. Discussion (clinical implications, failure modes)
+6. Conclusion & Future Work (multi-modal, multi-scale, ensemble)
+
+---
+
+## Appendix: Hyperparameter Summary
+
+```
+Image size:       224 × 224
+Batch size:       64
+Epochs:           15
+Optimizer:        AdamW (weight_decay=1e-4)
+LR encoder:       5e-5
+LR LAG + head:    5e-4
+Scheduler:        OneCycleLR (pct_start=0.1)
+Loss:             FocalLoss (alpha=0.25, gamma=2.0)
+Threshold:        0.3
+Sampler:          WeightedRandomSampler (balanced)
+CV:               StratifiedGroupKFold (5-fold, fold 0)
+Gradient clip:    max_norm=1.0
+Dropout:          0.5 (FC1), 0.3 (FC2)
+Kaiming init:     head[0].weight
+```
+
+---
+
+*Report prepared for Phase 1 completion. Proceed to Phase 2 for quantitative analysis and visualization.*

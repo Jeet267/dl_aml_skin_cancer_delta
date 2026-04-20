@@ -1,7 +1,7 @@
 <div align="center">
   <h1>ISIC 2024 — Skin Cancer Detection</h1>
   <p><strong>Binary classification of malignant vs benign skin lesions from the ISIC 2024 SLICE-3D dataset.</strong><br>
-  <em>Two-phase approach: tabular GBDT ensemble (Phase 1) + image deep learning (Phase 2) + stacking meta-learner (Phase 3).</em></p>
+  <em>Current Project Progress: Completed up to Phase 2 (Tabular Machine Learning & Image Deep Learning). Phase 3 (Stacking Meta-learner) is upcoming.</em></p>
 </div>
 
 ## 📌 Project & Evaluation Overview
@@ -59,17 +59,26 @@ Raw CSV (401,059 × 55)
 
 ---
 
-## 🖼 Phase 2: Image Deep Learning
-Fine-tuned pretrained backbones on 401K lesion images. 
+## 🖼 Phase 2: Image Deep Learning (Recently Completed)
 
-### Approach
-| Component | Choice | Reason |
-| :--- | :--- | :--- |
-| **Framework** | PyTorch + `timm` | Pretrained backbones |
-| **CV Structure** | `StratifiedGroupKFold(n=5)` | OOF predictions aligned by `isic_id` for Phase 3 stacking |
-| **Loss** | Focal loss ($\gamma=2$, $\alpha=0.25$) | Handles extreme 1020:1 class imbalance |
-| **Optimizer** | AdamW + OneCycleLR | Differential LRs |
-| **TTA** | 8 D4 transforms | Averaged sigmoid probabilities |
+In Phase 2, we developed state-of-the-art vision models to extract complex topological and textural features from 401K dermatoscopic images. 
+
+### 1. Data Preprocessing & Augmentation
+* **Input Preprocessing**: Images are resized from origin to fixed inputs (e.g., `224x224` and `256x256`), and standardized using ImageNet-specific statistics (mean and std). 
+* **Leakage Prevention**: We employed `StratifiedGroupKFold(n=5)` perfectly grouped by `patient_id` / `isic_id`. This prevents the model from achieving artificially high validation scores by "memorizing" lesions from the same patient across the train and test splits, aligning the OOF predictions for future phase stacking.
+* **Heavy Augmentation**: We applied an extensive image augmentation pipeline to combat the severe 1020:1 class imbalance and prevent model overfitting. This included **Test-Time Augmentation (TTA)** using D4 Symmetry Transformations (8 rotations/flips), Random Color Jittering, Gaussian Blur, and Coarse Dropout.
+
+### 2. Architecture Selection & Transfer Learning
+* **Framework**: Built natively on PyTorch and `timm` (PyTorch Image Models).
+* **Architectures Validated**: 
+  * **EfficientNetV2-S**: Chosen for highly optimized structural scaling of depth, width, and resolution.
+  * **ConvNeXtV2-B** & **SwinV2-B**: Modern architecture implementations capable of extracting complex, asymmetric features mimicking the "ABCDE" clinical rule.
+  * **ResNet50**: Evaluated as a baseline for deep feature representation due to residual skip-connections protecting from vanishing gradients.
+* **Transfer Learning**: We leveraged backbones pre-trained on ImageNet. The classification head was replaced to output a single neuron with Sigmoid activation. 
+
+### 3. Loss Mechanics & Optimization Strategy
+* **Focal Loss**: Standard Cross-Entropy fails severely given our imbalance metric. We substituted a customized **Focal loss** ($\gamma=2$, $\alpha=0.25$) to forcefully sculpt the loss landscape, penalizing the neural network heavily for missing malignant variations.
+* **Optimizer configuration**: Employed `AdamW` paired with a `OneCycleLR` learning rate scheduler. To preserve the backbone's feature knowledge, we implemented **Differential Learning Rates** during fine-tuning — keeping it conservative for the base convolution weights (`5e-5`), while aggressively training the dense classification head (`5e-4`).
 
 ### Image Model Results (5-Fold CV, TTA)
 | Model | Params | Image Size | OOF pAUC | OOF AUC |
@@ -80,14 +89,17 @@ Fine-tuned pretrained backbones on 401K lesion images.
 
 ---
 
-## 🧠 Phase 3: Stacking Meta-Learner (Ablation Result)
-Stacks Phase 1 tabular predictions + Phase 2 image OOF predictions through a Meta-Learner. This demonstrates the ultimate **Technical Validation**.
+## 🧠 Phase 3: Stacking Meta-Learner (Planned / Upcoming)
 
-* Phase 1 OOF (Tabular, pAUC=0.1653)
-* Phase 2 OOF (Images, pAUC=0.1549)
-* **Final Meta-Learner Logic**: Rank Transform → Logistic Regression → **Combined pAUC = `0.1745`**
+*Currently, the project is completed up through Phase 2. Phase 3 outlines the next logical stage to establish our final mathematical validaton.*
 
-**Stacking Result:** LogReg achieves `+5.6%` optimization over the best individual tabular model, proving that integrating structural image convolutions natively upgrades probabilistic tabular outputs.
+Phase 3 will function as the ultimate meta-learner, algorithmically stacking our probabilities from the tabular features and the complex visual features.
+
+* **Planned Inputs**: 
+  * Phase 1 OOF predictions from the Advanced GBDT Ensemble
+  * Phase 2 OOF predictions from the Image CV Models
+* **Planned Meta-Learner Logic**: Rank Transform → Logistic Regression baseline stacking mechanism.
+* **Objective**: To prove that natively synthesizing multi-modal domains (structured metadata features + raw deep convolutional extractions) synergizes the final predictive probabilities, elevating final ROC-AUC capability far above either single-domain boundary.
 
 ---
 

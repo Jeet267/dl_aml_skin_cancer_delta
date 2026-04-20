@@ -1,5 +1,5 @@
 # FusionSkinNet: Melanoma Detection via CNN + Clinical Metadata Fusion
-### Phase 1 Training Report — ISIC 2024 Challenge
+### Phase 2 Training Report — ISIC 2024 Challenge
 
 ---
 

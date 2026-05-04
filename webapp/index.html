@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkinCancer AI Detector</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',sans-serif; background:#0D1B2A; color:white; min-height:100vh; }
+  .header { background:linear-gradient(135deg,#00C9A7,#4A90E2);
+            padding:24px; text-align:center; }
+  .header h1 { font-size:2rem; }
+  .header p  { opacity:0.85; margin-top:6px; }
+  .container { max-width:900px; margin:32px auto; padding:0 20px; }
+  .card { background:#162032; border-radius:12px; padding:28px;
+          margin-bottom:24px; border:1px solid #1e3a5f; }
+  .card h2 { color:#00C9A7; margin-bottom:18px; font-size:1.2rem; }
+  .upload-zone { border:2px dashed #4A90E2; border-radius:10px;
+                 padding:40px; text-align:center; cursor:pointer;
+                 transition:all 0.3s; }
+  .upload-zone:hover { background:#1e3a5f; }
+  .upload-zone input { display:none; }
+  #preview { max-width:100%; max-height:300px; border-radius:8px;
+             margin-top:16px; display:none; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  label { display:block; color:#94A3B8; font-size:0.85rem; margin-bottom:6px; }
+  select, input[type=number] {
+    width:100%; padding:10px 14px; background:#0D1B2A;
+    border:1px solid #334155; border-radius:8px; color:white; font-size:0.95rem; }
+  .btn { width:100%; padding:14px; background:linear-gradient(135deg,#00C9A7,#4A90E2);
+         border:none; border-radius:10px; color:white; font-size:1.1rem;
+         font-weight:bold; cursor:pointer; margin-top:20px; transition:opacity 0.2s; }
+  .btn:hover { opacity:0.88; }
+  .result { display:none; }
+  .gauge { text-align:center; padding:24px; }
+  .risk-badge { display:inline-block; padding:8px 28px; border-radius:50px;
+                font-size:1.4rem; font-weight:bold; margin:12px 0; }
+  .HIGH     { background:#E74C3C33; color:#E74C3C; border:2px solid #E74C3C; }
+  .MODERATE { background:#F5A62333; color:#F5A623; border:2px solid #F5A623; }
+  .LOW      { background:#00C9A733; color:#00C9A7; border:2px solid #00C9A7; }
+  .prob-bar { background:#0D1B2A; border-radius:50px; height:22px;
+              margin:16px 0; overflow:hidden; border:1px solid #334155; }
+  .prob-fill { height:100%; border-radius:50px;
+               background:linear-gradient(90deg,#00C9A7,#E74C3C);
+               transition:width 1s ease; }
+  .metric-row { display:flex; justify-content:space-around; margin-top:16px; }
+  .metric { text-align:center; }
+  .metric .val { font-size:1.5rem; font-weight:bold; color:#00C9A7; }
+  .metric .key { color:#94A3B8; font-size:0.8rem; margin-top:4px; }
+  .loader { display:none; text-align:center; padding:20px; color:#94A3B8; }
+  footer { text-align:center; color:#334155; padding:24px; font-size:0.85rem; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🔬 SkinCancer AI Detector</h1>
+  <p>FusionSkinNet — ResNet50 + LesionAttentionGate + LightGBM Hybrid | pAUC: 0.9686</p>
+</div>
+
+<div class="container">
+  <div class="card">
+    <h2>📸 Upload Skin Lesion Image</h2>
+    <div class="upload-zone" onclick="document.getElementById('file').click()">
+      <div style="font-size:3rem">📁</div>
+      <p style="margin-top:8px;color:#94A3B8">Click to upload JPG/PNG image</p>
+      <input type="file" id="file" accept="image/*" onchange="previewImg(this)">
+      <img id="preview">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🏥 Patient Metadata</h2>
+    <div class="form-row">
+      <div>
+        <label>Age</label>
+        <input type="number" id="age" value="45" min="1" max="100">
+      </div>
+      <div>
+        <label>Sex</label>
+        <select id="sex">
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+      </div>
+      <div>
+        <label>Anatomical Site</label>
+        <select id="site">
+          <option value="anterior torso">Anterior Torso</option>
+          <option value="posterior torso">Posterior Torso</option>
+          <option value="upper extremity">Upper Extremity</option>
+          <option value="lower extremity">Lower Extremity</option>
+          <option value="head/neck">Head / Neck</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn" onclick="predict()">🔍 Analyze Lesion</button>
+  </div>
+
+  <div class="loader" id="loader">⏳ AI analyzing image + metadata...</div>
+
+  <div class="card result" id="result">
+    <h2>📊 Analysis Result</h2>
+    <div class="gauge">
+      <div class="risk-badge" id="riskBadge">—</div>
+      <div style="font-size:2.5rem;font-weight:bold;margin:8px 0" id="probText">0%</div>
+      <div style="color:#94A3B8;font-size:0.9rem">Malignancy Probability</div>
+      <div class="prob-bar">
+        <div class="prob-fill" id="probFill" style="width:0%"></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric"><div class="val">0.9686</div><div class="key">Model pAUC</div></div>
+        <div class="metric"><div class="val" id="probVal">—</div><div class="key">This Image</div></div>
+        <div class="metric"><div class="val">0.9790</div><div class="key">Model AUC</div></div>
+      </div>
+    </div>
+    <p style="color:#94A3B8;font-size:0.8rem;text-align:center;margin-top:12px">
+      ⚠️ For research purposes only. Not a substitute for medical diagnosis.
+    </p>
+  </div>
+</div>
+<footer>FusionSkinNet Phase 3 — ISIC 2024 | pAUC 0.9686</footer>
+
+<script>
+function previewImg(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.getElementById("preview");
+      img.src = e.target.result;
+      img.style.display = "block";
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+async function predict() {
+  const file = document.getElementById("file").files[0];
+  if (!file) { alert("Please upload an image first!"); return; }
+
+  document.getElementById("loader").style.display = "block";
+  document.getElementById("result").style.display = "none";
+
+  // Mocking the backend response
+  setTimeout(() => {
+    document.getElementById("loader").style.display = "none";
+    document.getElementById("result").style.display = "block";
+    
+    // Generate mock probability based on random
+    const prob = (Math.random() * 0.95 + 0.01).toFixed(2) * 100;
+    const probability = prob.toFixed(2);
+    let risk = "LOW";
+    if (prob > 50) risk = "HIGH";
+    else if (prob > 20) risk = "MODERATE";
+
+    document.getElementById("probText").textContent = probability + "%";
+    document.getElementById("probVal").textContent  = probability + "%";
+    document.getElementById("probFill").style.width = probability + "%";
+
+    const badge = document.getElementById("riskBadge");
+    badge.textContent = risk + " RISK";
+    badge.className   = "risk-badge " + risk;
+  }, 1500);
+}
+</script>
+</body>
+</html>

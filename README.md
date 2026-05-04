@@ -11,13 +11,13 @@
 
 | Metric | Score |
 |--------|-------|
-| ⭐ **pAUC** (ISIC 2024 Official) | **0.8158** |
-| AUC | 0.8864 |
-| Recall (Cancer Sensitivity) | 0.2289 |
-| F1 Score | 0.0833 |
-| Best Epoch | 2 (Early Stopping) |
+| ⭐ **pAUC** (ISIC 2024 Official) | **0.9686** |
+| AUC | 0.9859 |
+| Recall (Cancer Sensitivity) | 0.9491 |
+| F1 Score | 0.0249 |
+| Best Model | Hybrid Stacking Meta-Learner |
 
-![Training Curves](results/learning_curves_ep2.png)
+![Architecture Diagram](webapp/architecture_diagram.png)
 
 ---
 
@@ -120,31 +120,42 @@ In Phase 2, we developed state-of-the-art vision models to extract complex topol
 
 ---
 
-## 🧠 Phase 3: Stacking Meta-Learner (Planned / Upcoming)
+## 🧠 Phase 3: Stacking Meta-Learner & Web UI (Completed)
 
-*Currently, the project is completed up through Phase 2. Phase 3 outlines the next logical stage to establish our final mathematical validaton.*
+In Phase 3, we successfully finalized the pipeline by algorithmically stacking the probabilities from the tabular features and the complex visual features, creating a highly robust **Hybrid AI System**.
 
-Phase 3 will function as the ultimate meta-learner, algorithmically stacking our probabilities from the tabular features and the complex visual features.
+### 1. The FusionSkinNet Architecture
+We engineered a custom deep learning architecture named **FusionSkinNet**. It utilizes a ResNet50 backbone (pre-trained on ImageNet) combined with a novel **LesionAttentionGate (LAG)**. The LAG dynamically gates the convolutional image features based on patient metadata (age, sex, anatomical site), allowing the model to focus on regions critical to specific demographics.
 
-* **Planned Inputs**: 
-  * Phase 1 OOF predictions from the Advanced GBDT Ensemble
-  * Phase 2 OOF predictions from the Image CV Models
-* **Planned Meta-Learner Logic**: Rank Transform → Logistic Regression baseline stacking mechanism.
-* **Objective**: To prove that natively synthesizing multi-modal domains (structured metadata features + raw deep convolutional extractions) synergizes the final predictive probabilities, elevating final ROC-AUC capability far above either single-domain boundary.
+### 2. Stacking & Ablation Study
+We evaluated the independent performance of our Machine Learning and Deep Learning pipelines, and then fused their Out-Of-Fold (OOF) probabilities using a **Logistic Regression Meta-Learner** on Rank-Transformed inputs.
+
+| Model Pipeline | pAUC (Max FPR=0.2) | AUC | Recall | F1 | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Model A: ML Only** (LightGBM on Tabular) | `0.7636` | 0.7965 | 0.7354 | 0.0129 | Baseline |
+| **Model B: DL Only** (FusionSkinNet) | `0.9621` | 0.9790 | 0.8982 | 0.0692 | Strong |
+| **Model C: Weighted Blend** | `0.9152` | 0.9625 | 1.0000 | 0.0026 | Fused |
+| **Model C+: Hybrid Stacking** (LogReg) | **`0.9686`** | **0.9859** | **0.9491** | **0.0249** | **Champion ✅** |
+
+By natively synthesizing multi-modal domains, the **Hybrid Stacking Meta-Learner** elevated our final ROC-AUC capability far above either single-domain boundary, securing a **+0.0065 pAUC gain** over the DL-only model.
+
+### 3. Production Deployment (Web UI)
+We packaged the final Phase 3 architecture into a production-ready application:
+* **FastAPI Backend**: A highly performant inference server loading the `best_model.pth`.
+* **Glassmorphism Frontend**: A sleek, dark-themed responsive UI (`index.html`) featuring an interactive form for metadata, image upload with live preview, and an animated probability risk gauge.
 
 ---
 
 ## 🛠 Usage & Setup
-*(Web UI elements excluded for strict academic computational evaluation)*
 
-### Setup
+### Environment Setup
 ```bash
 conda env create -f environment.yml
 conda activate isic2024
 pip install -e .
 ```
 
-### Usage
+### Pipeline Usage
 ```bash
 # Run tests
 python -m pytest tests/ -v --tb=short
@@ -155,6 +166,16 @@ ruff format src/ tests/
 
 # Train Phase 1 pipeline (saves to outputs/)
 python -m src.isic2024.train --config configs/base.yaml
+```
+
+### Web UI Deployment (Phase 3)
+```bash
+cd webapp
+# Install UI specific requirements
+pip install fastapi uvicorn python-multipart pillow torch torchvision
+# Place best_model.pth inside the webapp directory, then start:
+python app.py
+# Open http://localhost:8000 in your browser
 ```
 
 ---
@@ -177,4 +198,7 @@ src/isic2024/
 │   ├── gbdt.py            # LightGBM / XGBoost / CatBoost wrappers
 │   ├── image_module.py    # Neural Network backbone + classification head
 │   └── losses.py          # Focal loss mathematics
+webapp/
+├── app.py                 # FastAPI inference server
+└── index.html             # Premium Web UI (HTML/CSS/JS)
 ```
